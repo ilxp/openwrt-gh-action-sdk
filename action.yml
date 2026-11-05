@@ -1,0 +1,113 @@
+name: "OpenWrt SDK"
+description: "Build OpenWrt packages via the SDK"
+author: aparcar
+runs:
+  using: 'composite'
+  steps:
+    - run: |
+        echo "artifacts_dir=${ARTIFACTS_DIR:-$GITHUB_WORKSPACE}" >> "$GITHUB_OUTPUT"
+        echo "feed_dir=${FEED_DIR:-$GITHUB_WORKSPACE}" >> "$GITHUB_OUTPUT"
+      shell: bash
+      id: inputs
+
+    # ============================================================
+    # 🌟 1. 获取 honk 版本号并安装 Zig & bpf-linker
+    # ============================================================
+    - name: Resolve honk toolchain versions
+      id: honk-toolchain
+      shell: bash
+      run: |
+        set -euo pipefail
+        git clone --depth 1 https://github.com/QiuSimons/luci-app-honk /tmp/luci-app-honk
+        . /tmp/luci-app-honk/honk/honk_toolchain.sh
+        echo "zig_version=${ZIG_VERSION}" >> "$GITHUB_OUTPUT"
+        echo "bpf_linker_version=${BPF_LINKER_VERSION}" >> "$GITHUB_OUTPUT"
+        echo "bpf_linker_sha256=${BPF_LINKER_SHA256}" >> "$GITHUB_OUTPUT"
+
+    - name: Setup Zig
+      uses: mlugg/setup-zig@v2
+      with:
+        version: ${{ steps.honk-toolchain.outputs.zig_version }}
+
+    - name: Prepare tools directory for Docker
+      shell: bash
+      run: |
+        set -euo pipefail
+        # 创建专门供 Docker 挂载的目录
+        mkdir -p /tmp/honk-tools
+        
+        # 将 setup-zig 装好的 zig 软链接到我们的临时目录
+        ln -sf "$(command -v zig)" /tmp/honk-tools/zig
+        
+        # 下载 bpf-linker 到临时目录
+        V="${{ steps.honk-toolchain.outputs.bpf_linker_version }}"
+        SHA="${{ steps.honk-toolchain.outputs.bpf_linker_sha256 }}"
+        curl -fsSL -o /tmp/bpf-linker.tar.zst \
+          "https://github.com/aya-rs/bpf-linker/releases/download/v${V}/bpf-linker-x86_64-unknown-linux-musl.tar.zst"
+        echo "${SHA}  /tmp/bpf-linker.tar.zst" | sha256sum -c -
+        tar --zstd -xf /tmp/bpf-linker.tar.zst -C /tmp/honk-tools
+        chmod +x /tmp/honk-tools/bpf-linker
+        
+        # 验证工具是否可用
+        /tmp/honk-tools/zig version
+        /tmp/honk-tools/bpf-linker --version
+
+    # ============================================================
+
+    - run: sudo chown -R 1000:1000 ${{ steps.inputs.outputs.artifacts_dir }} ${{ steps.inputs.outputs.feed_dir }}
+      shell: bash
+    -
+      name: Set up Docker QEMU
+      uses: docker/setup-qemu-action@v4
+    -
+      name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4
+    -
+      name: Build Docker container image
+      uses: docker/build-push-action@v7
+      env:
+        DOCKER_BUILD_SUMMARY: false
+      with:
+        push: false
+        tags: sdk
+        context: ${{ github.action_path }}
+        build-args: |
+          CONTAINER
+          ARCH
+        cache-to: type=gha,mode=max,scope=${{ env.CONTAINER }}-${{ env.ARCH }}
+        cache-from: type=gha,scope=${{ env.CONTAINER }}-${{ env.ARCH }}
+        load: true
+
+    # ============================================================
+    # 🌟 2. 挂载工具目录并注入 PATH 环境变量
+    # ============================================================
+    - run: |
+        docker run --rm \
+          --env BUILD \
+          --env BUILD_LOG \
+          --env EXTRA_FEEDS \
+          --env FEEDNAME \
+          --env IGNORE_ERRORS \
+          --env KEY_BUILD \
+          --env PRIVATE_KEY \
+          --env NO_DEFAULT_FEEDS \
+          --env NO_REFRESH_CHECK \
+          --env NO_SHFMT_CHECK \
+          --env PACKAGES \
+          --env INDEX \
+          --env V \
+          --env PATH="/honk-tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+          -v /tmp/honk-tools:/honk-tools \
+          -v ${{ steps.inputs.outputs.artifacts_dir }}:/artifacts \
+          -v ${{ steps.inputs.outputs.feed_dir }}:/feed \
+          sdk
+      shell: bash
+
+    # ============================================================
+
+    - run: sudo chown -R --reference=${{ steps.inputs.outputs.artifacts_dir }}/.. ${{ steps.inputs.outputs.artifacts_dir }}
+      shell: bash
+      if: always()
+    - run: sudo chown -R --reference=${{ steps.inputs.outputs.feed_dir }}/.. ${{ steps.inputs.outputs.feed_dir }}
+      shell: bash
+      if: always()
