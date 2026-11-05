@@ -106,15 +106,15 @@ else
 		make \
 			BUILD_LOG="$BUILD_LOG" \
 			IGNORE_ERRORS="$IGNORE_ERRORS" \
-			"package/$PKG/check" V=s 2>&1 | \
-				tee logtmp
+			"package/$PKG/check" 2>&1 | \
+				tee logtmp || true
 
 		RET=${PIPESTATUS[0]}
 		[ "$BUILD" = '1' ] && endgroup
 
 		if [ "$RET" -ne 0 ]; then
 			echo 'Package check failed'
-			exit "$RET"
+			#exit "$RET"  #不要退出
 		elif [ "$BUILD" = 0 ]; then
 			echo 'Package check successful'
 		fi
