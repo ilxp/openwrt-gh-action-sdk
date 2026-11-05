@@ -99,7 +99,7 @@ else
 		make \
 			BUILD_LOG="$BUILD_LOG" \
 			IGNORE_ERRORS="$IGNORE_ERRORS" \
-			"package/$PKG/download" V=s
+			"package/$PKG/download" V=s || true 
 		endgroup
 
 		[ "$BUILD" = '1' ] && group "make package/$PKG/check"
