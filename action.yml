@@ -62,6 +62,16 @@ runs:
     -
       name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
+      
+    # ============================================================
+    # 🌟 新增：在宿主机上提前修正脚本格式和权限
+    # ============================================================
+    - 
+      name: Fix entrypoint permissions and line endings
+      shell: bash
+      run: |
+        sudo sed -i 's/\r$//' ${{ github.action_path }}/entrypoint.sh
+        sudo chmod +x ${{ github.action_path }}/entrypoint.sh
     -
       name: Build Docker container image
       uses: docker/build-push-action@v7
