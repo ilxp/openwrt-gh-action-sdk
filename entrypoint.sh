@@ -67,8 +67,15 @@ group "feeds.conf"
 cat feeds.conf
 endgroup
 
-group "feeds update -a"
-./scripts/feeds update -a
+#安装全部库
+#group "feeds update -a"
+#./scripts/feeds update -a
+#endgroup
+
+#只安装基础库
+group "feeds update base luci"
+./scripts/feeds update base luci
+./scripts/feeds install -a
 endgroup
 
 group "make defconfig"
