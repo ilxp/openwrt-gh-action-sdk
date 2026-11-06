@@ -108,6 +108,9 @@ runs:
           --env V \
           --env PATH="/honk-tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
           -v /tmp/honk-tools:/honk-tools \
+          -v ${{ steps.inputs.outputs.feed_dir }}/cache/dl:/builder/dl \
+          -v ${{ steps.inputs.outputs.feed_dir }}/cache/build_dir:/builder/build_dir \
+          -v ${{ steps.inputs.outputs.feed_dir }}/cache/staging_dir:/builder/staging_dir \
           -v ${{ steps.inputs.outputs.artifacts_dir }}:/artifacts \
           -v ${{ steps.inputs.outputs.feed_dir }}:/feed \
           sdk
